@@ -1,0 +1,42 @@
+{
+  "name": "anas_zaynab_ci-cd",
+  "version": "1.0.0",
+  "description": "CLI tool to interact with the vehicle-server via HTTP. This project allows creating and listing vehicles from the command line, with a configurable server address. Developed as part of the CI/CD course project.",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zaynabchaiba-byte/Anas_Zaynab_CI-CD.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zaynabchaiba-byte/Anas_Zaynab_CI-CD/issues"
+  },
+  "homepage": "https://github.com/zaynabchaiba-byte/Anas_Zaynab_CI-CD#readme",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "bin": {
+    "vehicle-cli": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/node": "^25.1.0",
+    "eslint": "^9.39.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.54.0",
+    "vitest": "^2.1.9"
+  }
+}

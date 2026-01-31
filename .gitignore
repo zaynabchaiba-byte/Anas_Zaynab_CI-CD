@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+.DS_Store
+
+# Generated test files
+test/**/*.js
+test/**/*.d.ts
+test/**/*.map

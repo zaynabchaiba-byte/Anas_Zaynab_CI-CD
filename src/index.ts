@@ -1,98 +1,130 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { createVehicle, deleteVehicle, listVehicles } from "./http/client";
-import { HttpError, extractErrorLines } from "./utils/errors";
-
-function requireAddress(address?: string): string {
-  if (!address) {
-    console.error("Error: --address is required (do not hardcode localhost:8080).");
-    process.exit(1);
-  }
-  return address;
-}
-
-function prettyPrint(data: unknown) {
-  console.log(JSON.stringify(data, null, 2));
-}
-
-function handleUnknownError(e: unknown) {
-  // TypeScript: catch(e) => unknown, donc on type-guard
-  if (e instanceof HttpError) {
-    console.error(`Erreur serveur (${e.status})`);
-    const lines = extractErrorLines(e.body);
-    for (const line of lines) console.error(line);
-    process.exit(1);
-  }
-
-  if (e instanceof Error) {
-    console.error("Erreur:", e.message);
-    process.exit(1);
-  }
-
-  console.error("Erreur inattendue:", e);
-  process.exit(1);
-}
+import { VehicleClient, type Vehicle } from "./http/client";
+import { HttpError } from "./utils/errors";
 
 const program = new Command();
 
 program
-  .name("vehicle")
-  .description("CLI client for vehicle-server")
-  .option("--address <url>", "server base url (e.g. http://localhost:8080)");
+  .name("vehicle-cli")
+  .description("CLI client HTTP pour vehicle-server")
+  .requiredOption("-a, --address <url>", "Adresse du serveur (ex: http://localhost:8080)");
 
+function printHttpError(e: unknown, label: string) {
+  if (e instanceof HttpError) {
+    console.error(`${label} (HTTP ${e.status})`);
+    const body = typeof e.body === "string" ? e.body.trim() : "";
+    if (body) console.error(body);
+    return;
+  }
+  console.error(`${label} :`, e);
+}
+
+function formatTable(vehicles: Vehicle[]): string {
+  if (vehicles.length === 0) return "Aucun véhicule.";
+
+  const headers = ["ID", "Shortcode", "Battery", "Latitude", "Longitude"];
+  const rows = vehicles.map(v => [
+    String(v.id),
+    v.shortcode,
+    `${v.battery}%`,
+    String(v.latitude),
+    String(v.longitude),
+  ]);
+
+  const widths = headers.map((h, i) => Math.max(h.length, ...rows.map(r => r[i].length)));
+  const pad = (s: string, w: number) => s + " ".repeat(Math.max(0, w - s.length));
+  const line = (cells: string[]) => "| " + cells.map((c, i) => pad(c, widths[i])).join(" | ") + " |";
+  const sep = "|-" + widths.map(w => "-".repeat(w)).join("-|-") + "-|";
+
+  return [line(headers), sep, ...rows.map(line)].join("\n");
+}
+
+/** LIST */
 program
-  .command("list")
-  .description("List vehicles")
-  .action(async () => {
-    const opts = program.opts<{ address?: string }>();
-    const address = requireAddress(opts.address);
+  .command("list-vehicles")
+  .description("Lister les véhicules")
+  .option("--json", "Afficher en JSON (au lieu du tableau)")
+  .action(async (opts: { json?: boolean }) => {
+    const { address } = program.opts<{ address: string }>();
+    const client = new VehicleClient(address);
 
     try {
-      const vehicles = await listVehicles(address);
-      prettyPrint(vehicles);
-    } catch (e: unknown) {
-      handleUnknownError(e);
+      const vehicles = await client.listVehicles();
+      if (opts.json) console.log(JSON.stringify(vehicles, null, 2));
+      else console.log(formatTable(vehicles));
+    } catch (e) {
+      printHttpError(e, "Impossible de lister les véhicules");
+      process.exit(1);
     }
   });
 
+/** CREATE */
 program
-  .command("create")
-  .description("Create a vehicle (send JSON payload)")
-  .requiredOption("--data <json>", 'vehicle JSON payload, e.g. \'{"brand":"BMW","model":"X5"}\'')
-  .action(async (cmdOpts: { data: string }) => {
-    const opts = program.opts<{ address?: string }>();
-    const address = requireAddress(opts.address);
+  .command("create-vehicle")
+  .description("Créer un véhicule")
+  .requiredOption("--shortcode <code>", "Shortcode (ex: abcd)")
+  .requiredOption("--battery <n>", "Niveau de batterie (0-100)")
+  .requiredOption("--latitude <n>", "Latitude")
+  .requiredOption("--longitude <n>", "Longitude")
+  .action(async (opts: { shortcode: string; battery: string; latitude: string; longitude: string }) => {
+    const { address } = program.opts<{ address: string }>();
+    const client = new VehicleClient(address);
 
-    let payload: Record<string, unknown>;
+    const battery = Number(opts.battery);
+    const latitude = Number(opts.latitude);
+    const longitude = Number(opts.longitude);
+
     try {
-      payload = JSON.parse(cmdOpts.data);
-    } catch {
-      console.error("Error: --data must be valid JSON.");
+      const v = await client.createVehicle({
+        shortcode: String(opts.shortcode),
+        battery,
+        latitude,
+        longitude,
+      });
+      console.log(`Created vehicle \`${v.shortcode}\`, with ID \`${v.id}\``);
+    } catch (e) {
+      console.log("Could not create the vehicle");
+      console.log();
+
+      if (e instanceof HttpError) {
+        const body = typeof e.body === "string" ? e.body.trim() : "";
+        if (body) {
+          const lines = body.split("\n").map((s: string) => s.trim()).filter(Boolean);
+          for (const line of lines) console.log(`- ${line}`);
+        } else {
+          console.log(`- HTTP ${e.status}`);
+        }
+      } else {
+        console.log("- Unknown error");
+      }
+
+      process.exit(1);
+    }
+  });
+
+/** DELETE */
+program
+  .command("delete-vehicle")
+  .description("Supprimer un véhicule")
+  .argument("<id>", "ID du véhicule")
+  .action(async (id: string) => {
+    const { address } = program.opts<{ address: string }>();
+    const client = new VehicleClient(address);
+
+    const vehicleId = Number(id);
+    if (!Number.isFinite(vehicleId)) {
+      console.error("ID invalide (doit être un nombre).");
       process.exit(1);
     }
 
     try {
-      const created = await createVehicle(address, payload);
-      prettyPrint(created);
-    } catch (e: unknown) {
-      handleUnknownError(e);
+      await client.deleteVehicle(vehicleId);
+      console.log(`Deleted vehicle with ID \`${vehicleId}\``);
+    } catch (e) {
+      printHttpError(e, "Impossible de supprimer le véhicule");
+      process.exit(1);
     }
   });
 
-program
-  .command("delete")
-  .description("Delete a vehicle by id")
-  .requiredOption("--id <id>", "vehicle id")
-  .action(async (cmdOpts: { id: string }) => {
-    const opts = program.opts<{ address?: string }>();
-    const address = requireAddress(opts.address);
-
-    try {
-      const result = await deleteVehicle(address, cmdOpts.id);
-      prettyPrint(result);
-    } catch (e: unknown) {
-      handleUnknownError(e);
-    }
-  });
-
-program.parse();
+program.parse(process.argv);

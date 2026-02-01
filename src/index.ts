@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+feature/cli-http-refactor
 import { VehicleClient, type Vehicle } from "./http/client";
 import { HttpError } from "./utils/errors";
+
 
 const program = new Command();
 
 program
-  .name("vehicle-cli")
-  .description("CLI client HTTP pour vehicle-server")
-  .requiredOption("-a, --address <url>", "Adresse du serveur (ex: http://localhost:8080)");
+  .name("vehicle")
+  .description("CLI client for vehicle-server")
+  .option("--address <url>", "server base url (e.g. http://localhost:8080)");
 
 function printHttpError(e: unknown, fallbackLabel: string) {
   if (e instanceof HttpError) {
@@ -54,6 +56,7 @@ function formatTable(vehicles: Vehicle[]): string {
  * LIST
  */
 program
+feature/cli-http-refactor
   .command("list-vehicles")
   .description("Lister les véhicules")
   .option("--json", "Afficher en JSON (au lieu du tableau)")
@@ -61,7 +64,18 @@ program
     const { address } = program.opts<{ address: string }>();
     const client = new VehicleClient(address);
 
+
+program
+  .command("create")
+  .description("Create a vehicle (send JSON payload)")
+  .requiredOption("--data <json>", 'vehicle JSON payload, e.g. \'{"brand":"BMW","model":"X5"}\'')
+  .action(async (cmdOpts: { data: string }) => {
+    const opts = program.opts<{ address?: string }>();
+    const address = requireAddress(opts.address);
+
+    let payload: Record<string, unknown>;
     try {
+feature/cli-http-refactor
       const vehicles = await client.listVehicles();
       if (opts.json) {
         console.log(JSON.stringify(vehicles, null, 2));
@@ -124,10 +138,19 @@ program
         console.log();
         console.log("- Unknown error");
       }
+
       process.exit(1);
+    }
+
+    try {
+      const created = await createVehicle(address, payload);
+      prettyPrint(created);
+    } catch (e: unknown) {
+      handleUnknownError(e);
     }
   });
 
+feature/cli-http-refactor
 /**
  * DELETE
  */
@@ -151,7 +174,8 @@ program
     } catch (e) {
       printHttpError(e, "Impossible de supprimer le véhicule");
       process.exit(1);
+
     }
   });
 
-program.parse(process.argv);
+program.parse();

@@ -1,46 +1,32 @@
-import { HttpError } from "../utils/errors";
+import { HttpError, parseJsonSafe } from "../utils/errors";
 
-export type Vehicle = {
-  id: number;
-  shortcode: string;
-  battery: number;
-  latitude: number;
-  longitude: number;
-};
-
-export type CreateVehiclePayload = {
-  shortcode: string;
-  battery: number;
-  latitude: number;
-  longitude: number;
-};
+export type Vehicle = Record<string, unknown>;
 
 function normalizeBaseUrl(address: string): string {
+feature/cli-http-refactor
   if (address.startsWith("http://") || address.startsWith("https://")) return address;
   return `http://${address}`;
 }
 
-async function readBody(resp: Response): Promise<string> {
-  try {
-    return await resp.text();
-  } catch {
-    return "";
-  }
-}
+async function request<T>(address: string, path: string, init?: RequestInit): Promise<T> {
+  const baseUrl = normalizeBaseUrl(address);
+  const url = `${baseUrl}${path}`;
 
-export class VehicleClient {
-  private baseUrl: string;
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      "content-type": "application/json",
+      ...(init?.headers ?? {})
+    }
+  });
 
-  constructor(address: string) {
-    this.baseUrl = normalizeBaseUrl(address).replace(/\/+$/, "");
-  }
+  const body = await parseJsonSafe(res);
 
-  async listVehicles(): Promise<Vehicle[]> {
-    const resp = await fetch(`${this.baseUrl}/vehicles`);
-    if (!resp.ok) throw new HttpError(resp.status, await readBody(resp));
-    return (await resp.json()) as Vehicle[];
+  if (!res.ok) {
+    throw new HttpError(res.status, `HTTP ${res.status} ${res.statusText}`, body);
   }
 
+feature/cli-http-refactor
   async createVehicle(payload: CreateVehiclePayload): Promise<Vehicle> {
     const resp = await fetch(`${this.baseUrl}/vehicles`, {
       method: "POST",

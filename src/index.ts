@@ -64,9 +64,7 @@ program
         console.log("Réponse serveur :", result);
       }
     } catch (error) {
-      console.error(
-        `Impossible de contacter le serveur à ${address}. Vérifie qu'il est lancé.`
-      );
+      console.error("Impossible de contacter le serveur :", error);
       process.exit(1);
     }
   });

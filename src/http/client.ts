@@ -1,48 +1,71 @@
-import { HttpError, parseJsonSafe } from "../utils/errors";
+import { HttpError } from "../utils/errors";
 
-export type Vehicle = Record<string, unknown>;
+export type Vehicle = {
+  id: number;
+  shortcode: string;
+  battery: number;
+  latitude: number;
+  longitude: number;
+};
+
+export type CreateVehiclePayload = {
+  shortcode: string;
+  battery: number;
+  latitude: number;
+  longitude: number;
+};
 
 function normalizeBaseUrl(address: string): string {
-feature/cli-http-refactor
   if (address.startsWith("http://") || address.startsWith("https://")) return address;
   return `http://${address}`;
 }
 
-async function request<T>(address: string, path: string, init?: RequestInit): Promise<T> {
-  const baseUrl = normalizeBaseUrl(address);
-  const url = `${baseUrl}${path}`;
+async function readBody(resp: Response): Promise<string> {
+  try {
+    return await resp.text();
+  } catch {
+    return "";
+  }
+}
 
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(init?.headers ?? {})
-    }
-  });
+export class VehicleClient {
+  private baseUrl: string;
 
-  const body = await parseJsonSafe(res);
-
-  if (!res.ok) {
-    throw new HttpError(res.status, `HTTP ${res.status} ${res.statusText}`, body);
+  constructor(address: string) {
+    this.baseUrl = normalizeBaseUrl(address).replace(/\/+$/, "");
   }
 
-feature/cli-http-refactor
+  async listVehicles(): Promise<Vehicle[]> {
+    const resp = await fetch(`${this.baseUrl}/vehicles`);
+    if (!resp.ok) {
+      const body = await readBody(resp);
+      throw new HttpError(resp.status, resp.statusText ?? "HTTP error", body);
+    }
+    return (await resp.json()) as Vehicle[];
+  }
+
   async createVehicle(payload: CreateVehiclePayload): Promise<Vehicle> {
     const resp = await fetch(`${this.baseUrl}/vehicles`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
-    if (!resp.ok) throw new HttpError(resp.status, await readBody(resp));
+    if (!resp.ok) {
+      const body = await readBody(resp);
+      throw new HttpError(resp.status, resp.statusText ?? "HTTP error", body);
+    }
     return (await resp.json()) as Vehicle;
   }
 
   async deleteVehicle(id: number): Promise<void> {
-    const resp = await fetch(`${this.baseUrl}/vehicles/${encodeURIComponent(String(id))}`, {
-      method: "DELETE"
-    });
-
-    if (!resp.ok) throw new HttpError(resp.status, await readBody(resp));
+    const resp = await fetch(
+      `${this.baseUrl}/vehicles/${encodeURIComponent(String(id))}`,
+      { method: "DELETE" }
+    );
+    if (!resp.ok) {
+      const body = await readBody(resp);
+      throw new HttpError(resp.status, resp.statusText ?? "HTTP error", body);
+    }
   }
 }

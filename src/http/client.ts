@@ -1,59 +1,46 @@
-import { HttpError } from "../utils/errors";
+import { HttpError, parseJsonSafe } from "../utils/errors";
 
-export type Vehicle = {
-  id: number;
-  shortcode: string;
-  battery: number;
-  latitude: number;
-  longitude: number;
-};
-
-export type CreateVehiclePayload = {
-  shortcode: string;
-  battery: number;
-  latitude: number;
-  longitude: number;
-};
+export type Vehicle = Record<string, unknown>;
 
 function normalizeBaseUrl(address: string): string {
-  // supporte "localhost:8080" ou "http://localhost:8080"
-  if (address.startsWith("http://") || address.startsWith("https://")) return address;
-  return `http://${address}`;
+  return address.replace(/\/+$/, "");
 }
 
-async function readBody(resp: Response): Promise<string> {
-  try {
-    return await resp.text();
-  } catch {
-    return "";
+async function request<T>(address: string, path: string, init?: RequestInit): Promise<T> {
+  const baseUrl = normalizeBaseUrl(address);
+  const url = `${baseUrl}${path}`;
+
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      "content-type": "application/json",
+      ...(init?.headers ?? {})
+    }
+  });
+
+  const body = await parseJsonSafe(res);
+
+  if (!res.ok) {
+    throw new HttpError(res.status, `HTTP ${res.status} ${res.statusText}`, body);
   }
+
+  return body as T;
 }
 
-export class VehicleClient {
-  private baseUrl: string;
+export async function listVehicles(address: string): Promise<Vehicle[]> {
+  return request<Vehicle[]>(address, "/vehicles", { method: "GET" });
+}
 
-  constructor(address: string) {
-    this.baseUrl = normalizeBaseUrl(address).replace(/\/+$/, "");
-  }
+export async function createVehicle(address: string, payload: Vehicle): Promise<Vehicle> {
+  return request<Vehicle>(address, "/vehicles", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
 
-  async listVehicles(): Promise<Vehicle[]> {
-    const resp = await fetch(`${this.baseUrl}/vehicles`);
-    if (!resp.ok) throw new HttpError(resp.status, await readBody(resp));
-    return (await resp.json()) as Vehicle[];
-  }
-
-  async createVehicle(payload: CreateVehiclePayload): Promise<Vehicle> {
-    const resp = await fetch(`${this.baseUrl}/vehicles`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    if (!resp.ok) throw new HttpError(resp.status, await readBody(resp));
-    return (await resp.json()) as Vehicle;
-  }
-
-  async deleteVehicle(id: number): Promise<void> {
-    const resp = await fetch(`${this.baseUrl}/vehicles/${id}`, { method: "DELETE" });
-    if (!resp.ok) throw new HttpError(resp.status, await readBody(resp));
-  }
+export async function deleteVehicle(address: string, id: string): Promise<{ ok: true }> {
+  await request<unknown>(address, `/vehicles/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+  return { ok: true };
 }

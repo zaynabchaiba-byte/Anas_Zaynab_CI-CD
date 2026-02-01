@@ -2,21 +2,22 @@ const js = require("@eslint/js");
 const tseslint = require("typescript-eslint");
 
 module.exports = [
-  // ✅ Ignorer ce qui ne doit jamais être linté
+  // Ignorer ce qui ne doit jamais être linté
   {
     ignores: [
       "dist/**",
       "node_modules/**",
       "eslint.config.cjs",
       "test/**/*.js",
-      "test/**/*.d.ts"
+      "test/**/*.d.ts",
+      "test/**/*.map"
     ]
   },
 
   js.configs.recommended,
   ...tseslint.configs.recommended,
 
-  // ✅ Lint TS uniquement (src + test)
+  // Lint TS uniquement (src + test)
   {
     files: ["src/**/*.ts", "test/**/*.ts"],
     languageOptions: {

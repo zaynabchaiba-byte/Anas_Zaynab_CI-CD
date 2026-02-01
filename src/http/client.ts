@@ -16,7 +16,6 @@ export type CreateVehiclePayload = {
 };
 
 function normalizeBaseUrl(address: string): string {
-  // supporte "localhost:8080" ou "http://localhost:8080"
   if (address.startsWith("http://") || address.startsWith("https://")) return address;
   return `http://${address}`;
 }
@@ -48,12 +47,16 @@ export class VehicleClient {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
     });
+
     if (!resp.ok) throw new HttpError(resp.status, await readBody(resp));
     return (await resp.json()) as Vehicle;
   }
 
   async deleteVehicle(id: number): Promise<void> {
-    const resp = await fetch(`${this.baseUrl}/vehicles/${id}`, { method: "DELETE" });
+    const resp = await fetch(`${this.baseUrl}/vehicles/${encodeURIComponent(String(id))}`, {
+      method: "DELETE"
+    });
+
     if (!resp.ok) throw new HttpError(resp.status, await readBody(resp));
   }
 }

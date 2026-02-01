@@ -35,8 +35,41 @@ program.command("create-vehicle").action(() => {
   console.log("TODO: create-vehicle");
 });
 
-program.command("delete-vehicle").argument("<id>").action((id: string) => {
-  console.log("TODO: delete-vehicle", id);
-});
+program
+  .command("delete-vehicle")
+  .description("Supprimer un véhicule")
+  .argument("<id>", "ID du véhicule")
+  .action(async (id: string) => {
+    const { address } = program.opts<{ address: string }>();
+
+    try {
+      const response = await fetch(`${address}/vehicles/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Erreur serveur (${response.status})`);
+        if (errorText) {
+          console.error(errorText);
+        }
+        process.exit(1);
+      }
+
+      // Certains serveurs répondent 204 No Content
+      if (response.status === 204) {
+        console.log("Véhicule supprimé avec succès.");
+      } else {
+        const result = await response.text();
+        console.log("Réponse serveur :", result);
+      }
+    } catch (error) {
+      console.error(
+        `Impossible de contacter le serveur à ${address}. Vérifie qu'il est lancé.`
+      );
+      process.exit(1);
+    }
+  });
+
 
 program.parse(process.argv);

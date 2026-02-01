@@ -2,3 +2,8 @@ node_modules
 dist
 .env
 .DS_Store
+dist/
+test/*.js
+test/*.js.map
+test/*.d.ts
+test/*.d.ts.map
